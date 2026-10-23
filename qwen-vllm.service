@@ -1,0 +1,17 @@
+[Unit]
+Description=Qwen3.8-27B vLLM server (OpenAI API on :8000)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cph-llm-test
+WorkingDirectory=/home/cph-llm-test/Projects/Qwen-vLLM
+Environment=PATH=/home/cph-llm-test/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/cph-llm-test/Projects/Qwen-vLLM/serve.sh
+KillSignal=SIGINT
+TimeoutStopSec=60
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

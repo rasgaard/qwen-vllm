@@ -1,0 +1,13 @@
+# secrets
+.api-key
+
+# weights (re-download per README) and environment
+models/
+.venv/
+.cuda-home/
+__pycache__/
+
+# runtime output
+*.log
+evals/data/
+evals/results/*.npz
