@@ -44,6 +44,11 @@ sudo ufw allow from 10.183.65.0/24 to any port 8000 proto tcp
 3. Copy `opencode.example.json` to `~/.config/opencode/opencode.json`
    (or merge its `provider` block into an existing config).
 
+Reasoning effort defaults to `medium`. The `off` / `low` / `medium` / `xhigh` variants switch
+it with opencode's `variant_cycle` keybind. Leaving `reasoning_effort` unset in the request means `xhigh`, which thinks the longest.
+The chat template only accepts `low`, `medium` and `xhigh` (`none` turns thinking off). Any
+other value, such as `high` or `minimal`, makes every request fail with HTTP 400.
+
 ## What it runs and why
 
 | Choice | Reason |

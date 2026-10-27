@@ -13,7 +13,14 @@
           "name": "Qwen3.8 27B",
           "tool_call": true,
           "reasoning": true,
-          "limit": { "context": 65536, "output": 16384 }
+          "limit": { "context": 65536, "output": 16384 },
+          "options": { "reasoningEffort": "medium" },
+          "variants": {
+            "off": { "reasoningEffort": "none" },
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "xhigh": { "reasoningEffort": "xhigh" }
+          }
         }
       }
     }
