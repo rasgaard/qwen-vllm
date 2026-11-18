@@ -5,7 +5,7 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Qwen3.8 27B (LAN)",
       "options": {
-        "baseURL": "http://10.183.65.74:8000/v1",
+        "baseURL": "http://{env:QWEN_LAN_HOST}:8000/v1",
         "apiKey": "{env:QWEN_LAN_API_KEY}"
       },
       "models": {

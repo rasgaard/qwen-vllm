@@ -1,7 +1,11 @@
 # Qwen3.8-27B on vLLM (RTX PRO 4000 Blackwell, 24 GB)
 
-OpenAI-compatible server on `http://10.183.65.74:8000/v1`, model name `qwen3.8-27b`,
+OpenAI-compatible server on `http://$QWEN_LAN_HOST:8000/v1`, model name `qwen3.8-27b`,
 for opencode clients on the LAN.
+
+`QWEN_LAN_HOST` is the server's IP or hostname. The IP comes from DHCP and can change when the
+machine moves; check it on the server with `ip -4 -br addr`. Clients on the same subnet can use
+`<hostname>.local` instead (mDNS via avahi), but mDNS does not cross subnets.
 
 ## Setup (fresh machine)
 
@@ -23,26 +27,45 @@ uv run python patch_drafter.py
 ./stop.sh
 ```
 
-Or as a service (survives logout/reboot):
+On this machine it is installed as a systemd service: it starts on boot and restarts on
+failure. It is ready about a minute after start (model load and warmup). Install it once with:
 
 ```bash
+./stop.sh   # free the GPU and port if serve.sh is running in a terminal
 sudo cp qwen-vllm.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now qwen-vllm
-journalctl -u qwen-vllm -f
 ```
 
-LAN access needs the firewall (ufw) opened once:
+Day to day:
 
 ```bash
-sudo ufw allow from 10.183.65.0/24 to any port 8000 proto tcp
+systemctl status qwen-vllm
+journalctl -u qwen-vllm -f            # logs; no sudo needed for users in the adm group
+sudo systemctl restart qwen-vllm      # e.g. after editing serve.sh
+sudo systemctl stop qwen-vllm         # or ./stop.sh; starts again on next boot
+```
+
+LAN access needs the firewall (ufw) opened once per client subnet. Clients on a subnet that
+isn't allowed time out (ETIMEDOUT):
+
+```bash
+sudo ufw allow from <client-subnet>/24 to any port 8000 proto tcp
+grep 'UFW BLOCK' /var/log/ufw.log | grep DPT=8000   # who is being dropped
 ```
 
 ## Connect with opencode
 
 1. Get the API key from the server owner (`.api-key` in this directory).
-2. `export QWEN_LAN_API_KEY=sk-...` (shell profile).
+2. `export QWEN_LAN_API_KEY=sk-...` and `export QWEN_LAN_HOST=<server IP or hostname>`
+   (shell profile).
 3. Copy `opencode.example.json` to `~/.config/opencode/opencode.json`
    (or merge its `provider` block into an existing config).
+
+Troubleshooting from the client:
+`curl -H "Authorization: Bearer $QWEN_LAN_API_KEY" http://$QWEN_LAN_HOST:8000/v1/models`.
+ECONNREFUSED means the wrong network or the server is down, and ETIMEDOUT means the firewall
+(see above). "Unauthorized" means the key isn't reaching opencode: export the variables in the shell that
+starts opencode, then restart opencode.
 
 Reasoning effort defaults to `medium`. The `off` / `low` / `medium` / `xhigh` variants switch
 it with opencode's `variant_cycle` keybind. Leaving `reasoning_effort` unset in the request means `xhigh`, which thinks the longest.
