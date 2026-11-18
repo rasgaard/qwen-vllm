@@ -45,6 +45,19 @@ sudo systemctl restart qwen-vllm      # e.g. after editing serve.sh
 sudo systemctl stop qwen-vllm         # or ./stop.sh; starts again on next boot
 ```
 
+The service caps GPU power at 110 W (card default and max 145 W, min 100 W) before starting
+vLLM, because the card's blower fan is loud at full power. Decode is mostly memory-bandwidth
+bound, so the cap costs less speed than power; prefill slows more. The limit resets on reboot
+and is re-applied on every service start. To change it by hand (takes effect immediately):
+
+```bash
+sudo nvidia-smi -pl 110                                   # 100-145 W
+nvidia-smi --query-gpu=power.limit,power.draw,temperature.gpu,fan.speed --format=csv
+```
+
+After editing `qwen-vllm.service`, reinstall it with
+`sudo cp qwen-vllm.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart qwen-vllm`.
+
 LAN access needs the firewall (ufw) opened once per client subnet. Clients on a subnet that
 isn't allowed time out (ETIMEDOUT):
 

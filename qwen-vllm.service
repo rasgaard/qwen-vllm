@@ -7,6 +7,8 @@ Wants=network-online.target
 User=cph-llm-test
 WorkingDirectory=/home/cph-llm-test/Projects/Qwen-vLLM
 Environment=PATH=/home/cph-llm-test/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Cap GPU power at 110 W (default 145 W) to keep the blower fan quieter; "+" runs it as root
+ExecStartPre=+/usr/bin/nvidia-smi -pl 110
 ExecStart=/home/cph-llm-test/Projects/Qwen-vLLM/serve.sh
 KillSignal=SIGINT
 TimeoutStopSec=60
