@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qwen vLLM dashboard</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4;
+  --surface-1: #ffffff;
+  --border: #e3e3e0;
+  --grid: #ececea;
+  --text-primary: #191919;
+  --text-secondary: #666666;
+  --series-1: #257de0;
+  --series-2: #f47230;
+  --good: #008a17;
+  --critical: #d6312f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111111;
+    --surface-1: #191919;
+    --border: #2c2c2c;
+    --grid: #262626;
+    --text-primary: #efefef;
+    --text-secondary: #9c9c9c;
+    --series-1: #338ced;
+    --series-2: #e76624;
+    --good: #0aac23;
+    --critical: #eb6263;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111111;
+  --surface-1: #191919;
+  --border: #2c2c2c;
+  --grid: #262626;
+  --text-primary: #efefef;
+  --text-secondary: #9c9c9c;
+  --series-1: #338ced;
+  --series-2: #e76624;
+  --good: #0aac23;
+  --critical: #eb6263;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text-primary);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 40px; }
+header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.status { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-secondary); }
+.status.live .dot { background: var(--good); }
+.status.down .dot { background: var(--critical); }
+.status.down { color: var(--critical); }
+.muted { color: var(--text-secondary); }
+section { margin-top: 24px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .label { font-size: 12px; color: var(--text-secondary); }
+.tile .value { font-size: 24px; font-weight: 600; margin-top: 2px; white-space: nowrap; }
+.tile .value small { font-size: 13px; font-weight: 400; color: var(--text-secondary); margin-left: 3px; }
+.tile .sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.chart { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 8px; position: relative; }
+.chart .title { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
+.chart .title .cur { font-weight: 400; color: var(--text-secondary); }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.chart svg { display: block; width: 100%; height: 150px; overflow: visible; touch-action: none; }
+.chart svg text { fill: var(--text-secondary); font-size: 11px; }
+.tip {
+  position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  white-space: nowrap; display: none; z-index: 2;
+}
+.tip b { font-weight: 600; }
+.tip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--text-secondary); font-size: 12px; }
+td.num, th.num { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+.bad { color: var(--critical); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Qwen3.8-27B on vLLM</h1>
+    <span id="status" class="status"><span class="dot"></span><span id="status-text">connecting…</span></span>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section>
+    <h2>Last 30 minutes</h2>
+    <div class="charts" id="charts"></div>
+  </section>
+
+  <section class="tables">
+    <div class="card">
+      <h2 id="clients-title">Clients</h2>
+      <table><thead><tr><th>Address</th><th class="num">Requests</th><th class="num">Errors</th><th class="num">Prompt tok</th><th class="num">Generated tok</th><th class="num">Firewall drops</th><th>Last seen</th></tr></thead>
+      <tbody id="clients"></tbody></table>
+    </div>
+    <div class="card">
+      <h2>Recent requests</h2>
+      <table><thead><tr><th>Time</th><th>Address</th><th>Status</th><th>Request</th></tr></thead>
+      <tbody id="recent"></tbody></table>
+    </div>
+  </section>
+</main>
+
+<script>
+const HISTORY_S = 30 * 60;
+let history = [];
+let last = null;
+
+const fmt = {
+  int: v => v == null ? '–' : Math.round(v).toLocaleString(),
+  one: v => v == null ? '–' : v.toFixed(1),
+  two: v => v == null ? '–' : v.toFixed(2),
+};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function clock(iso) {
+  if (!iso) return '–';
+  const d = new Date(iso), now = new Date();
+  const t = d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+  return d.toDateString() === now.toDateString() ? t
+    : d.toLocaleDateString([], {month: 'short', day: 'numeric'}) + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+// ---- charts: one measure per chart, shared time axis ----
+const CHARTS = [
+  {id: 'gen', title: 'Generated tokens / s', series: [{label: 'generated', color: '--series-1', get: p => p.gen_tps}], fmt: fmt.int},
+  {id: 'prompt', title: 'Prompt tokens / s', series: [{label: 'prompt', color: '--series-1', get: p => p.prompt_tps}], fmt: fmt.int},
+  {id: 'reqs', title: 'Requests', series: [
+     {label: 'running', color: '--series-1', get: p => p.running},
+     {label: 'waiting', color: '--series-2', get: p => p.waiting}], fmt: fmt.int, minMax: 4, integer: true},
+  {id: 'kv', title: 'KV cache used', unit: '%', series: [{label: 'KV cache', color: '--series-1', get: p => p.kv}], fmt: fmt.int, max: 100},
+  {id: 'power', title: 'GPU power', unit: ' W', series: [{label: 'power', color: '--series-1', get: p => p.gpu && p.gpu.power}], fmt: fmt.int,
+     maxFrom: p => p.gpu && p.gpu.power_limit},
+  {id: 'util', title: 'GPU utilization', unit: '%', series: [{label: 'utilization', color: '--series-1', get: p => p.gpu && p.gpu.util}], fmt: fmt.int, max: 100},
+  {id: 'temp', title: 'GPU temperature', unit: ' °C', series: [{label: 'temperature', color: '--series-1', get: p => p.gpu && p.gpu.temp}], fmt: fmt.int, minMax: 90},
+  {id: 'fan', title: 'Fan speed', unit: '%', series: [{label: 'fan', color: '--series-1', get: p => p.gpu && p.gpu.fan}], fmt: fmt.int, max: 100},
+];
+
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+}
+
+function buildCharts() {
+  const root = document.getElementById('charts');
+  for (const c of CHARTS) {
+    const el = document.createElement('div');
+    el.className = 'chart';
+    el.innerHTML = `<div class="title"><span>${c.title}</span><span class="cur" id="cur-${c.id}"></span></div>` +
+      (c.series.length > 1 ? `<div class="legend">${c.series.map(s => `<span><i style="background:var(${s.color})"></i>${s.label}</span>`).join('')}</div>` : '') +
+      `<svg id="svg-${c.id}" role="img" aria-label="${c.title}, last 30 minutes"></svg><div class="tip" id="tip-${c.id}"></div>`;
+    root.appendChild(el);
+    const svg = el.querySelector('svg');
+    svg.addEventListener('pointermove', e => hover(c, e));
+    svg.addEventListener('pointerleave', () => hover(c, null));
+  }
+}
+
+const PAD = {l: 40, r: 8, t: 8, b: 20};
+
+function geom(c) {
+  const svg = document.getElementById('svg-' + c.id);
+  const w = svg.clientWidth, h = svg.clientHeight;
+  const now = history.length ? history[history.length - 1].t : Date.now() / 1000;
+  const t0 = now - HISTORY_S;
+  let max = c.max;
+  if (max == null) {
+    let m = c.minMax || 0;
+    for (const p of history) for (const s of c.series) { const v = s.get(p); if (v != null && v > m) m = v; }
+    const lim = c.maxFrom && history.length ? c.maxFrom(history[history.length - 1]) : null;
+    if (lim && m <= lim * 1.05) max = lim;                // e.g. power: scale to the power cap
+    else if (c.integer) max = Math.max(2, 2 * Math.ceil(m / 2));
+    else max = niceMax(m * 1.05);
+  }
+  const x = t => PAD.l + (t - t0) / HISTORY_S * (w - PAD.l - PAD.r);
+  const y = v => PAD.t + (1 - v / max) * (h - PAD.t - PAD.b);
+  return {svg, w, h, x, y, max, t0, now};
+}
+
+function draw(c) {
+  const g = geom(c);
+  const {svg, w, h, x, y, max, t0, now} = g;
+  let s = '';
+  for (let i = 0; i <= 2; i++) {
+    const v = max * i / 2, yy = y(v);
+    s += `<line x1="${PAD.l}" x2="${w - PAD.r}" y1="${yy}" y2="${yy}" stroke="${css('--grid')}" stroke-width="1"/>`;
+    s += `<text x="${PAD.l - 6}" y="${yy + 4}" text-anchor="end">${c.fmt(v)}</text>`;
+  }
+  for (const [t, label] of [[t0, '−30 min'], [t0 + HISTORY_S / 2, '−15 min'], [now, 'now']]) {
+    const anchor = label === 'now' ? 'end' : label === '−30 min' ? 'start' : 'middle';
+    s += `<text x="${x(t)}" y="${h - 4}" text-anchor="${anchor}">${label}</text>`;
+  }
+  for (const ser of [...c.series].reverse()) {
+    let d = '', pen = false, prevT = null;
+    for (const p of history) {
+      const v = ser.get(p);
+      const gap = prevT != null && p.t - prevT > 10;
+      if (v == null || gap) pen = false;
+      if (v != null) { d += (pen ? 'L' : 'M') + x(p.t).toFixed(1) + ',' + y(Math.min(v, max)).toFixed(1); pen = true; }
+      prevT = p.t;
+    }
+    s += `<path d="${d}" fill="none" stroke="${css(ser.color)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  s += `<g class="hover"></g>`;
+  svg.innerHTML = s;
+  const lastP = history[history.length - 1];
+  const cur = lastP ? c.series.map(ser => ser.get(lastP)) : [];
+  document.getElementById('cur-' + c.id).textContent =
+    c.series.length > 1 ? c.series.map((ser, i) => `${ser.label} ${c.fmt(cur[i])}`).join(' · ')
+    : (cur[0] == null ? '–' : c.fmt(cur[0]) + (c.unit || ''));
+  if (c._hoverX != null) hover(c, {offsetX: c._hoverX, sticky: true});
+}
+
+function hover(c, e) {
+  const tip = document.getElementById('tip-' + c.id);
+  const svg = document.getElementById('svg-' + c.id);
+  const layer = svg.querySelector('.hover');
+  if (!e || !history.length) { c._hoverX = null; tip.style.display = 'none'; if (layer) layer.innerHTML = ''; return; }
+  c._hoverX = e.offsetX;
+  const g = geom(c);
+  const tAt = g.t0 + (e.offsetX - PAD.l) / (g.w - PAD.l - PAD.r) * HISTORY_S;
+  let best = null;
+  for (const p of history) if (!best || Math.abs(p.t - tAt) < Math.abs(best.t - tAt)) best = p;
+  if (!best || Math.abs(best.t - tAt) > 30) { tip.style.display = 'none'; layer.innerHTML = ''; return; }
+  const xx = g.x(best.t);
+  let s = `<line x1="${xx}" x2="${xx}" y1="${PAD.t}" y2="${g.h - PAD.b}" stroke="${css('--text-secondary')}" stroke-width="1" stroke-dasharray="2 3"/>`;
+  let rows = '';
+  for (const ser of c.series) {
+    const v = ser.get(best);
+    if (v != null) s += `<circle cx="${xx}" cy="${g.y(Math.min(v, g.max))}" r="4" fill="${css(ser.color)}" stroke="${css('--surface-1')}" stroke-width="2"/>`;
+    rows += `<div><i style="background:var(${ser.color})"></i>${ser.label} <b>${c.fmt(v)}${v == null ? '' : (c.unit || '')}</b></div>`;
+  }
+  layer.innerHTML = s;
+  tip.innerHTML = `<div class="muted">${new Date(best.t * 1000).toLocaleTimeString()}</div>${rows}`;
+  tip.style.display = 'block';
+  const chartW = svg.parentElement.clientWidth;
+  const left = xx + 14 + tip.offsetWidth > chartW ? xx - tip.offsetWidth - 2 : xx + 26;
+  tip.style.left = left + 'px';
+  tip.style.top = (svg.offsetTop + 8) + 'px';
+}
+
+// ---- tiles and tables ----
+function tile(label, value, unit, sub) {
+  return `<div class="tile"><div class="label">${label}</div><div class="value">${value}${unit ? `<small>${unit}</small>` : ''}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+}
+
+function renderTiles(st) {
+  const n = st.now || {}, g = n.gpu, t = st.totals || {};
+  document.getElementById('tiles').innerHTML = [
+    tile('Requests running', fmt.int(n.running), '', `${fmt.int(n.waiting)} waiting`),
+    tile('Generating', fmt.int(n.gen_tps), 'tok/s', `prompt ${fmt.int(n.prompt_tps)} tok/s`),
+    tile('KV cache used', fmt.int(n.kv), '%'),
+    tile('GPU power', g ? fmt.int(g.power) : '–', g ? `/ ${fmt.int(g.power_limit)} W` : '', g ? `SM clock ${fmt.int(g.sm_clock)} MHz` : ''),
+    tile('GPU temperature', g ? fmt.int(g.temp) : '–', '°C', g ? `fan ${fmt.int(g.fan)}%` : ''),
+    tile('GPU utilization', g ? fmt.int(g.util) : '–', '%', g ? `VRAM ${fmt.one(g.mem_used / 1024)} / ${fmt.one(g.mem_total / 1024)} GiB` : ''),
+    tile('Requests served', fmt.int(t.requests), '', 'since server start'),
+    tile('Tokens', fmt.int(t.gen_tokens), 'out', `${fmt.int(t.prompt_tokens)} in · ${t.prefix_hit == null ? '–' : fmt.int(t.prefix_hit) + '%'} prefix cache`),
+    tile('Time to first token', fmt.one(t.ttft), 's', `avg request ${fmt.one(t.e2e)} s`),
+    tile('MTP acceptance', fmt.two(t.mtp), 'tok/step', `${fmt.int(t.preemptions)} preemptions`),
+  ].join('');
+}
+
+function renderTables(st) {
+  document.getElementById('clients-title').textContent = `Clients, last ${st.hours} h`;
+  const cl = document.getElementById('clients');
+  if (st.logs_error) cl.innerHTML = `<tr><td colspan="7" class="muted">Logs unavailable: ${esc(st.logs_error)}</td></tr>`;
+  else cl.innerHTML = st.clients.length ? st.clients.map(c => `<tr><td>${esc(c.ip)}</td><td class="num">${c.ok}</td>` +
+    `<td class="num${c.err ? ' bad' : ''}">${c.err}</td><td class="num">${fmt.int(c.prompt)}</td><td class="num">${fmt.int(c.gen)}</td><td class="num${c.blocked ? ' bad' : ''}">${c.blocked}</td><td>${clock(c.last)}</td></tr>`).join('')
+    : `<tr><td colspan="7" class="muted">No requests</td></tr>`;
+  const rc = document.getElementById('recent');
+  rc.innerHTML = st.recent.length ? st.recent.map(r => `<tr><td>${clock(r.t)}</td><td>${esc(r.ip)}</td>` +
+    `<td class="${r.status >= 400 ? 'bad' : ''}">${r.status}</td><td>${esc(r.method)} ${esc(r.path)}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="muted">No requests</td></tr>`;
+}
+
+function setStatus(ok, text) {
+  const el = document.getElementById('status');
+  el.className = 'status ' + (ok ? 'live' : 'down');
+  document.getElementById('status-text').textContent = text;
+}
+
+async function poll(full) {
+  try {
+    const r = await fetch('api/state' + (full ? '?history' : ''), {cache: 'no-store'});
+    const st = await r.json();
+    if (full) history = st.history || [];
+    else if (st.now && (!history.length || st.now.t > history[history.length - 1].t)) history.push(st.now);
+    const cutoff = (st.now ? st.now.t : Date.now() / 1000) - HISTORY_S;
+    while (history.length && history[0].t < cutoff) history.shift();
+    last = st;
+    setStatus(st.ok, st.ok ? `live · updated ${new Date().toLocaleTimeString()}` : (st.error || 'vLLM unreachable'));
+    renderTiles(st);
+    renderTables(st);
+    CHARTS.forEach(draw);
+  } catch (e) {
+    setStatus(false, 'dashboard unreachable');
+  }
+}
+
+buildCharts();
+poll(true);
+setInterval(() => poll(false), 2000);
+window.addEventListener('resize', () => CHARTS.forEach(draw));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => CHARTS.forEach(draw));
+</script>
+</body>
+</html>

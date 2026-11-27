@@ -66,6 +66,37 @@ sudo ufw allow from <client-subnet>/24 to any port 8000 proto tcp
 grep 'UFW BLOCK' /var/log/ufw.log | grep DPT=8000   # who is being dropped
 ```
 
+## Dashboard
+
+`dashboard.py` serves a live web dashboard on port 8080 at `http://$QWEN_LAN_HOST:8080/`.
+It runs on the server next to vLLM, needs only the Python standard library, and refreshes
+every 2 s. It shows:
+
+- requests running and waiting, token throughput, KV cache use, prefix cache hits, latency and
+  MTP acceptance
+- GPU power against the cap, temperature, fan, utilization, VRAM and clock (nvidia-smi)
+- charts of the last 30 minutes, kept in memory, so they start empty after a restart
+- per-client requests, errors, prompt and generated tokens and firewall drops over the last
+  24 h, plus recent requests (from the service journal and `/var/log/ufw.log`)
+
+Tokens per client come from `usage_log.py`, an ASGI middleware that `serve.sh` loads into vLLM
+(`--middleware`). It logs one `USAGE ip=... prompt=... completion=...` line per completion.
+For streamed responses it turns on `stream_options.include_usage` and strips the extra usage
+chunk again if the client didn't ask for it. Prompt tokens include tokens served from the prefix
+cache. Generated tokens include reasoning tokens.
+
+Install it as a service, and open the port to the same subnets as 8000:
+
+```bash
+sudo cp qwen-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now qwen-dashboard
+sudo ufw allow from <client-subnet>/24 to any port 8080 proto tcp
+```
+
+The dashboard has no login. Anyone who can reach port 8080 sees client IP addresses and
+request paths, but never prompts or the API key. `serve.sh` keeps `/metrics` polls out of
+vLLM's access log.
+
 ## Connect with opencode
 
 1. Get the API key from the server owner (`.api-key` in this directory).

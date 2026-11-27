@@ -44,6 +44,7 @@ ln -sf "$CU13/lib/libcudart.so.13" "$CUDA_HOME/lib64/libcudart.so"
 ln -sf "$CU13/lib/libcudadevrt.a" "$CUDA_HOME/lib64/libcudadevrt.a"
 export PATH="$CUDA_HOME/bin:$PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"   # for usage_log.py
 
 case "$SPEC" in
   dspark) SPEC_ARGS=(--speculative-config "{\"method\":\"dspark\",\"model\":\"$DRAFTER\",\"num_speculative_tokens\":${NUM_SPEC:-7}}") ;;
@@ -71,5 +72,7 @@ exec uv run vllm serve "$MODEL" \
   --reasoning-parser qwen3 \
   --enable-auto-tool-choice \
   --tool-call-parser qwen3_xml \
+  --disable-access-log-for-endpoints /metrics,/health \
+  --middleware usage_log.UsageLogMiddleware \
   "${SPEC_ARGS[@]}" \
   "$@"

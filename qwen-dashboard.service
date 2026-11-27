@@ -1,0 +1,14 @@
+[Unit]
+Description=Qwen vLLM dashboard (web UI on :8080)
+After=network-online.target qwen-vllm.service
+Wants=network-online.target
+
+[Service]
+User=cph-llm-test
+WorkingDirectory=/home/cph-llm-test/Projects/Qwen-vLLM
+ExecStart=/usr/bin/python3 /home/cph-llm-test/Projects/Qwen-vLLM/dashboard.py --port 8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
